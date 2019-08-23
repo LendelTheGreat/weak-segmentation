@@ -43,45 +43,45 @@ def run():
         n_crops = 0
         
         image = io.imread(os.path.join(dir_images, filename))
-        segmap = io.imread(os.path.join(dir_segmaps, filename))
+        segmap_colors = io.imread(os.path.join(dir_segmaps, filename))
         
-        assert image.shape == segmap.shape, 'Shape of image and segmap must be equal'
+        assert image.shape == segmap_colors.shape, 'Shape of image and segmap must be equal'
         
         # y, x are all possible cropped center points
-        for y in range(crop_halfsize, segmap.shape[0]-crop_halfsize, crop_halfsize):
-            for x in range(crop_halfsize, segmap.shape[1]-crop_halfsize, crop_halfsize):
-                segmap_crop = segmap[y-crop_halfsize:y+crop_halfsize, x-crop_halfsize:x+crop_halfsize, :]
+        for y in range(crop_halfsize, segmap_colors.shape[0]-crop_halfsize, crop_halfsize):
+            for x in range(crop_halfsize, segmap_colors.shape[1]-crop_halfsize, crop_halfsize):
+                segmap_colors_crop = segmap_colors[y-crop_halfsize:y+crop_halfsize, x-crop_halfsize:x+crop_halfsize, :]
                 
-                if contains_clutter_class(segmap_crop, class_presence_threshold):
+                if contains_clutter_class(segmap_colors_crop, class_presence_threshold):
                     total_filtered_crops += 1 # TODO: this does not work
                 else:
                     image_crop = image[y-crop_halfsize:y+crop_halfsize, x-crop_halfsize:x+crop_halfsize, :]
                     
-                    #Save image_crop and segmap_crop
+                    #Save image_crop and segmap_colors_crop
                     if img_id in train_strong_ids:
                         io.imsave(os.path.join(dir_train_strong_img,
                                                'img_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
                                   image_crop, check_contrast=False)
                         io.imsave(os.path.join(dir_train_strong_seg,
                                                'seg_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
-                                  segmap_crop, check_contrast=False)
+                                  segmap_colors_crop, check_contrast=False)
                     elif img_id in train_weak_ids:
                         io.imsave(os.path.join(dir_train_weak_img, 'img_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
                                   image_crop, check_contrast=False)
                         io.imsave(os.path.join(dir_train_weak_seg, 'seg_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
-                                  segmap_crop, check_contrast=False)
+                                  segmap_colors_crop, check_contrast=False)
                     elif img_id in val_ids:
                         io.imsave(os.path.join(dir_val_img, 'img_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
                                   image_crop, check_contrast=False)
                         io.imsave(os.path.join(dir_val_seg, 'seg_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
-                                  segmap_crop, check_contrast=False)
+                                  segmap_colors_crop, check_contrast=False)
                     elif img_id in test_ids:
                         io.imsave(os.path.join(dir_test_img, 'img_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
                                   image_crop, check_contrast=False)
                         io.imsave(os.path.join(dir_test_seg, 'seg_{:0>2d}_{:0>4d}_{:0>4d}.png'.format(img_id, y, x)),
-                                  segmap_crop, check_contrast=False)
+                                  segmap_colors_crop, check_contrast=False)
 
-                    class_vec = segmap_to_class_vec(image_to_segmap(segmap_crop), class_presence_threshold)
+                    class_vec = segmap_to_class_vec(image_to_segmap(segmap_colors_crop), class_presence_threshold)
                     class_sums += class_vec
                     n_crops += 1
     
