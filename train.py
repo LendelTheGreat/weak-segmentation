@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 import os
 from shutil import copyfile
+import time
 
 import numpy as np
 import random
@@ -16,6 +17,7 @@ import torchvision.transforms as transforms
 
 from data.data_iterator import SimpleISPRSVaihingenDataset
 import models.dummynet
+import models.unet
 from utils.visuals import make_grid
 
 seed = 8671
@@ -43,7 +45,8 @@ def train(opt):
     logging.basicConfig(level=logging.INFO if not opt.debug else logging.DEBUG,
                         handlers=[logging.FileHandler(os.path.join(dir_logs, 'console_output.log')),
                                   logging.StreamHandler()])
-    logger = logging.getLogger()
+    logger = logging.getLogger('train')
+    logging.getLogger('PIL').setLevel(logging.WARNING)
     tb_writer = SummaryWriter(log_dir=dir_logs)
     
     logger.info('Starting training with opt {}'.format(opt))
@@ -67,26 +70,23 @@ def train(opt):
     if opt.model == 'dummynet':
         model = models.dummynet.DummyNet()
     elif opt.model == 'unet':
-        model = models.unet.UNet()
+        model = models.unet.UNet(logger)
     else:
         logger.error('Unknown model name! {}'.format(opt.model))
     model.to(device)
 
     mse = nn.MSELoss()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=opt.lr)
 
     for epoch in range(opt.epochs):
+        start_time = time.time()
 
         # Training
-        # print('### Train')
         model.train()
         for i, data in enumerate(train_data_loader):
             image = data['image'].to(device)
             segmap_gt = data['segmap'].to(device)
-
-            if epoch == 0 and i == 0:
-                tb_writer.add_graph(model, image)
 
             optimizer.zero_grad()
             segmap_pred = model(image)
@@ -102,14 +102,14 @@ def train(opt):
                 break
 
         # Evaluate on train
-        # print('### Eval on Train')
         model.eval()
         train_loss = 0
         for i, data in enumerate(train_for_eval_data_loader):
-            image = data['image'].to(device)
-            segmap_gt = data['segmap'].to(device)
-            segmap_pred = model(image)
-            loss = mse(segmap_pred, segmap_gt)
+            with torch.no_grad():
+                image = data['image'].to(device)
+                segmap_gt = data['segmap'].to(device)
+                segmap_pred = model(image)
+                loss = mse(segmap_pred, segmap_gt)
 
             train_loss += loss.item()
             if i == 0:
@@ -124,14 +124,14 @@ def train(opt):
 
 
         # Evaluate on val
-        # print('### Eval on val')
         model.eval()
         val_loss = 0
         for i, data in enumerate(val_data_loader):
-            image = data['image'].to(device)
-            segmap_gt = data['segmap'].to(device)
-            segmap_pred = model(image)
-            loss = mse(segmap_pred, segmap_gt)
+            with torch.no_grad():
+                image = data['image'].to(device)
+                segmap_gt = data['segmap'].to(device)
+                segmap_pred = model(image)
+                loss = mse(segmap_pred, segmap_gt)
 
             val_loss += loss.item()
             if i == 0:
@@ -145,7 +145,8 @@ def train(opt):
 
         val_loss /= i+1
 
-        logger.info('Epoch {: >3d}  |  Train loss {: >2.6f}  |  Val loss {: >2.6f}'.format(epoch, train_loss, val_loss))
+        logger.info('Epoch {: >3d}  |  Train loss {: >2.6f}  |  Val loss {: >2.6f}  |  Time: {}'.format(
+            epoch, train_loss, val_loss, time.time() - start_time))
         tb_writer.add_scalar('train/loss', train_loss, epoch)
         tb_writer.add_scalar('val/loss', val_loss, epoch)
         tb_writer.close()
@@ -155,8 +156,9 @@ if __name__== "__main__":
     parser.add_argument('--model', required=True, help='From models folder (e.g. dummynet)')
     parser.add_argument('--gpu', default='0', help='GPU to run on (0 or 1)')
     parser.add_argument('--epochs', default=10, type=int, help='Number of epochs')
-    parser.add_argument('--batch_size', default=32, type=int, help='batch_size')
-    parser.add_argument('--debug', '-d', action='store_true', help='run in debug mode')
+    parser.add_argument('--batch_size', default=32, type=int, help='Batch size')
+    parser.add_argument('--lr', default=0.001, type=float, help='Learning rate')
+    parser.add_argument('--debug', '-d', action='store_true', help='Run in debug mode')
     opt = parser.parse_args()
     train(opt)
     
