@@ -33,7 +33,7 @@ class StrongWeakISPRSVaihingenDataset(Dataset):
             segmapnames_weak = [file for file in segmapnames_weak if file.split('.')[-1] == 'png']
             assert len(self.imagenames_weak) == len(segmapnames_weak), 'Images and segmaps weak folders should contain same number of files!\nimages: {}\nsegmaps: {}'.format(len(self.imagenames_weak), len(segmapnames_weak))
         else:
-            self.imagenames_strong = []
+            self.imagenames_weak = []
             
         self.transform = transform
         

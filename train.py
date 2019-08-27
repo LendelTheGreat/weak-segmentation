@@ -61,7 +61,7 @@ def train(opt):
     logger.info('Found available device {}'.format(device))
 
     if opt.no_weak_supervision:
-        train_dataset = SimpleISPRSVaihingenDataset(dir_train_strong_img, dir_train_strong_seg, transforms.ToTensor())
+        train_dataset = StrongWeakISPRSVaihingenDataset(dir_train_strong, None, transforms.ToTensor())
     elif opt.no_strong_supervision:
         train_dataset = StrongWeakISPRSVaihingenDataset(None, dir_train_weak, transforms.ToTensor())
     else:
@@ -135,10 +135,8 @@ def train(opt):
                 class_vec_gt = data['class_vec'].to(device)
                 segmap_pred = model(image)
                 loss_strong = loss_weak = 0
-                if not opt.no_strong_supervision:
-                    loss_strong = segmap_loss_func(segmap_pred, segmap_gt).item()
-                if not opt.no_weak_supervision:
-                    loss_weak = class_loss_func(segmap_pred, class_vec_gt).item()
+                loss_strong = segmap_loss_func(segmap_pred, segmap_gt).item()
+                loss_weak = class_loss_func(segmap_pred, class_vec_gt).item()
 
             train_loss_strong += loss_strong
             train_loss_weak += loss_weak
@@ -152,8 +150,11 @@ def train(opt):
                     break
         train_loss_strong /= i+1
         train_loss_weak /= i+1
-        train_loss = train_loss_strong + (train_loss_weak * opt.lambda_weak)
-
+        train_loss = 0
+        if not opt.no_strong_supervision:
+            train_loss += train_loss_strong
+        if not opt.no_weak_supervision:
+            train_loss += train_loss_weak * opt.lambda_weak
 
         # Evaluate on val
         model.eval()
@@ -166,10 +167,8 @@ def train(opt):
                 class_vec_gt = data['class_vec'].to(device)
                 segmap_pred = model(image)
                 loss_strong = loss_weak = 0
-                if not opt.no_strong_supervision:
-                    loss_strong = segmap_loss_func(segmap_pred, segmap_gt)
-                if not opt.no_weak_supervision:
-                    loss_weak = class_loss_func(segmap_pred, class_vec_gt)
+                loss_strong = segmap_loss_func(segmap_pred, segmap_gt)
+                loss_weak = class_loss_func(segmap_pred, class_vec_gt)
 
             val_loss_strong += loss_strong
             val_loss_weak += loss_weak
@@ -184,7 +183,11 @@ def train(opt):
 
         val_loss_strong /= i+1
         val_loss_weak /= i+1
-        val_loss = val_loss_strong + (val_loss_weak * opt.lambda_weak)
+        val_loss = 0
+        if not opt.no_strong_supervision:
+            val_loss += val_loss_strong
+        if not opt.no_weak_supervision:
+            val_loss += val_loss_weak * opt.lambda_weak
         
         if val_loss_strong < best_val_loss_strong:
             best_val_loss_strong = val_loss_strong
