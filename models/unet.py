@@ -34,22 +34,16 @@ class UNet(nn.Module):
     def forward(self, x):
         down0 = self.down0(x)
         x = self.maxpool(down0)
-        self.logger.debug(down0.size())
         down1 = self.down1(x)
         x = self.maxpool(down1)
-        self.logger.debug(down1.size())
         down2 = self.down2(x)
         x = self.maxpool(down2)
-        self.logger.debug(down2.size())
         down3 = self.down3(x)
         x = self.maxpool(down3)
-        self.logger.debug(down3.size())
         
         x = self.bottom(x)
-        self.logger.debug(x.size())
         
         x = self.upsample3(x)
-        self.logger.debug(x.size())
         x = torch.cat([x, down3], dim=1)   
         x = self.up3(x)
         

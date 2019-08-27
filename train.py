@@ -40,6 +40,8 @@ dir_val_img = os.path.join(dir_output, 'val', 'img')
 dir_val_seg = os.path.join(dir_output, 'val', 'seg')
 
 def train(opt):
+    start_time = time.time()
+    
     dir_logs = os.path.join(os.getenv('HOME'), 'logs', opt.model+'_'+str(datetime.now().strftime("%Y%m%d_%H-%M-%S")))
     os.makedirs(dir_logs)
     copyfile('train.py', os.path.join(dir_logs, 'train.py'))
@@ -48,8 +50,9 @@ def train(opt):
     logging.basicConfig(level=logging.INFO if not opt.debug else logging.DEBUG,
                         handlers=[logging.FileHandler(os.path.join(dir_logs, 'console_output.log')),
                                   logging.StreamHandler()])
-    logger = logging.getLogger('train')
     logging.getLogger('PIL').setLevel(logging.WARNING)
+    logger = logging.getLogger('train')
+    logger.info('Saving model logs into {}'.format(dir_logs))
     tb_writer = SummaryWriter(log_dir=dir_logs)
     
     logger.info('Starting training with opt {}'.format(opt))
@@ -87,9 +90,11 @@ def train(opt):
     class_loss_func = ClassLoss()
 
     optimizer = optim.Adam(model.parameters(), lr=opt.lr)
+    
+    best_val_loss_strong = np.inf
 
     for epoch in range(opt.epochs):
-        start_time = time.time()
+        epoch_start_time = time.time()
 
         # Training
         model.train()
@@ -116,7 +121,8 @@ def train(opt):
                     tb_writer.add_image('train_debug/images', grid, epoch, dataformats='HWC')
                     tb_writer.close()
                 logger.debug('train iter {: >4d}  |  loss {: >2.4f}'.format(i, loss.item()))
-                break
+                if i >= 0:
+                    break
 
         # Evaluate on train
         model.eval()
@@ -176,8 +182,18 @@ def train(opt):
                 if i >= 0:
                     break
 
-        logger.info('Epoch {: >3d}  |  Train loss {: >2.6f}  |  Val loss {: >2.6f}  |  Time: {}'.format(
-            epoch, train_loss, val_loss, time.time() - start_time))
+        val_loss_strong /= i+1
+        val_loss_weak /= i+1
+        val_loss = val_loss_strong + (val_loss_weak * opt.lambda_weak)
+        
+        if val_loss_strong < best_val_loss_strong:
+            best_val_loss_strong = val_loss_strong
+            logger.info('Saving best model with val loss {} at epoch {}'.format(best_val_loss_strong, epoch))
+            torch.save(model.state_dict(), os.path.join(dir_logs, 'model_weights_best.pth'))
+
+        logger.info('Epoch {: >3d}  |  Train loss {: >2.6f} = strong {: >2.6f} + weak {: >2.6f} |  Val loss {: >2.6f} = strong {: >2.6f} + weak {: >2.6f} |  Time: {}'.format(
+            epoch, train_loss, train_loss_strong, train_loss_weak,
+            val_loss, val_loss_strong, val_loss_weak, time.time() - epoch_start_time))
         tb_writer.add_scalar('train/loss', train_loss, epoch)
         tb_writer.add_scalar('train/loss_strong', train_loss_strong, epoch)
         tb_writer.add_scalar('train/loss_weak', train_loss_weak, epoch)
@@ -185,6 +201,8 @@ def train(opt):
         tb_writer.add_scalar('val/loss_strong', val_loss_strong, epoch)
         tb_writer.add_scalar('val/loss_weak', val_loss_weak, epoch)
         tb_writer.close()
+    logger.info('Finished training in {:.0f}'.format(time.time() - start_time))
+        
         
 if __name__== "__main__":
     parser = argparse.ArgumentParser()
