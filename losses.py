@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -18,33 +19,29 @@ class SegmentationLoss(torch.nn.Module):
 class ClassLoss(torch.nn.Module):
     def __init__(self):
         super(ClassLoss, self).__init__()
-        self.avgpool = nn.AvgPool2d(192)
         self.loss = nn.BCELoss()
         
+    def global_weighted_rank_pooling(self, probs, class_vec_gt):
+        sh = probs.size() # probs size: B C H W
+        probs = probs.view(sh[0], sh[1], sh[2]*sh[3]).contiguous()
+        probs_sorted, _ = probs.sort(dim=2) # probs_sorted size: B C H*W
         
-    def global_weighted_rank_pooling(x):
-        # TODO: finish this
-        
-        # initial shape: B C H W
-        sh = x.size()
-        x = x.view(sh[0], sh[1], sh[2]*sh[3]).contiguous()
-        x = x.permute(0, 2, 1) # resulting shape (B, H*W, C)
-        probs_sort = x.sort(axis=1) # TODO
-        
-        q_fg = 0.99
-        weights = np.array([ q_fg ** i for i in range(sh[2]*sh[3]-1, -1, -1)])
-        weights = np.reshape(weights,(1,-1,1))
+        weights = np.zeros((sh[0], sh[1], sh[2]*sh[3])) # weights size: B C H*W
+        for b, class_gt_batch in enumerate(class_vec_gt):
+            for c, class_gt in enumerate(class_gt_batch):
+                q_fg = 0 if class_gt.item() == 0 else 0.99
+                weights[b, c, :] = np.array([ q_fg ** i for i in range(sh[2]*sh[3] - 1, -1, -1)])
         weights = torch.Tensor(weights)
+        weights = weights.to(probs_sorted.get_device())
         Z_fg = weights.sum()
-        probs_mean = tf.reduce_sum((probs_sort*weights)/Z_fg, axis=1)
+        probs_normalized = probs_sorted * weights
+        probs_normalized = probs_normalized / Z_fg # probs_normalized size: B C H*W
+        probs_mean = torch.sum(probs_normalized, dim=2) # probs_mean size: B C
         
-        
-        return class_vec
+        return probs_mean
         
     def forward(self, segmap_pred, class_vec_gt):
-        #class_vec_gt = class_vec_gt * 0.5 # TODO: maybe adjust for each class frequency - only if we use MSE loss
-        
-        class_vec_pred = self.avgpool(segmap_pred).squeeze()
+        class_vec_pred = self.global_weighted_rank_pooling(segmap_pred, class_vec_gt)
         
         loss = self.loss(class_vec_pred, class_vec_gt)
         return loss
