@@ -33,7 +33,7 @@ class ClassLoss(torch.nn.Module):
                 weights[b, c, :] = np.array([ q_fg ** i for i in range(sh[2]*sh[3] - 1, -1, -1)])
         weights = torch.Tensor(weights)
         weights = weights.to(probs_sorted.get_device())
-        Z_fg = weights.sum()
+        Z_fg = weights.sum(dim=2, keepdim=True)
         probs_normalized = probs_sorted * weights
         probs_normalized = probs_normalized / Z_fg # probs_normalized size: B C H*W
         probs_mean = torch.sum(probs_normalized, dim=2) # probs_mean size: B C
