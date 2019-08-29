@@ -98,10 +98,12 @@ def train(opt):
 
     for epoch in range(opt.epochs):
         epoch_start_time = time.time()
+        n_seen_datapoints_before_evaluation = 0
+        n_eval_iterations = 0
 
         # Training
-        model.train()
         for i, data in enumerate(train_data_loader):
+            model.train()
             image = data['image'].to(device)
             segmap_gt = data['segmap'].to(device)
             class_vec_gt = data['class_vec'].to(device)
@@ -131,114 +133,118 @@ def train(opt):
                     grid = make_grid(image, segmap_pred, segmap_gt)
                     tb_writer.add_image('train_debug/images', grid, epoch, dataformats='HWC')
                     tb_writer.close()
-                logger.debug('train iter {: >4d}  |  loss {: >2.4f}'.format(i, loss.item()))
-                if i >= 0:
-                    break
+                logger.debug('train iter {: >4d}  |  loss {: >2.4f}  n_seen_datapoints_before_evaluation {} '.format(
+                    i, loss.item(), n_seen_datapoints_before_evaluation))
+             
+            n_seen_datapoints_before_evaluation += opt.batch_size
+            if n_seen_datapoints_before_evaluation >= opt.val_datapoints:
+                n_seen_datapoints_before_evaluation = 0
+                
+                # Evaluate on train
+                model.eval()
+                train_loss_strong = 0
+                train_loss_weak = 0
+                train_loss_flip = 0
+                for i_eval, data in enumerate(train_for_eval_data_loader):
+                    with torch.no_grad():
+                        image = data['image'].to(device)
+                        segmap_gt = data['segmap'].to(device)
+                        class_vec_gt = data['class_vec'].to(device)
+                        segmap_pred = model(image)
+                        loss_strong = loss_weak = loss_flip = 0
+                        loss_strong = segmap_loss_func(segmap_pred, segmap_gt).item()
+                        loss_weak = class_loss_func(segmap_pred, class_vec_gt).item()
+                        if opt.lambda_flip > 0:
+                            flip_dims = random.choice([[2], [3], (2, 3)])
+                            image_flipped = image.flip(dims=flip_dims)
+                            segmap_flipped_pred = model(image_flipped)
+                            segmap_unflipped_pred = segmap_flipped_pred.flip(dims=flip_dims)
+                            loss_flip = segmap_loss_func(segmap_pred, segmap_unflipped_pred)
 
-        # Evaluate on train
-        model.eval()
-        train_loss_strong = 0
-        train_loss_weak = 0
-        train_loss_flip = 0
-        for i, data in enumerate(train_for_eval_data_loader):
-            with torch.no_grad():
-                image = data['image'].to(device)
-                segmap_gt = data['segmap'].to(device)
-                class_vec_gt = data['class_vec'].to(device)
-                segmap_pred = model(image)
-                loss_strong = loss_weak = loss_flip = 0
-                loss_strong = segmap_loss_func(segmap_pred, segmap_gt).item()
-                loss_weak = class_loss_func(segmap_pred, class_vec_gt).item()
+                    train_loss_strong += loss_strong
+                    train_loss_weak += loss_weak
+                    train_loss_flip += loss_flip
+                    if i_eval == 0:
+                        grid = make_grid(image, segmap_pred, segmap_gt)
+                        tb_writer.add_image('train/images', grid, epoch, dataformats='HWC')
+                        tb_writer.close()
+
+                    if opt.debug:
+                        if i_eval >= 0:
+                            break
+                train_loss_strong /= i_eval+1
+                train_loss_weak /= i_eval+1
+                train_loss_flip /= i_eval+1
+                train_loss = 0
+                if not opt.no_strong_supervision:
+                    train_loss += train_loss_strong
+                if not opt.no_weak_supervision:
+                    train_loss += train_loss_weak * opt.lambda_weak
                 if opt.lambda_flip > 0:
-                    flip_dims = random.choice([[2], [3], (2, 3)])
-                    image_flipped = image.flip(dims=flip_dims)
-                    segmap_flipped_pred = model(image_flipped)
-                    segmap_unflipped_pred = segmap_flipped_pred.flip(dims=flip_dims)
-                    loss_flip = segmap_loss_func(segmap_pred, segmap_unflipped_pred)
+                    train_loss += train_loss_flip * opt.lambda_flip
 
-            train_loss_strong += loss_strong
-            train_loss_weak += loss_weak
-            train_loss_flip += loss_flip
-            if i == 0:
-                grid = make_grid(image, segmap_pred, segmap_gt)
-                tb_writer.add_image('train/images', grid, epoch, dataformats='HWC')
-                tb_writer.close()
+                # Evaluate on val
+                model.eval()
+                val_loss_strong = 0
+                val_loss_weak = 0
+                val_loss_flip = 0
+                for i_eval, data in enumerate(val_data_loader):
+                    with torch.no_grad():
+                        image = data['image'].to(device)
+                        segmap_gt = data['segmap'].to(device)
+                        class_vec_gt = data['class_vec'].to(device)
+                        segmap_pred = model(image)
+                        loss_strong = loss_weak = loss_flip = 0
+                        loss_strong = segmap_loss_func(segmap_pred, segmap_gt)
+                        loss_weak = class_loss_func(segmap_pred, class_vec_gt)
+                        if opt.lambda_flip > 0:
+                            flip_dims = random.choice([[2], [3], (2, 3)])
+                            image_flipped = image.flip(dims=flip_dims)
+                            segmap_flipped_pred = model(image_flipped)
+                            segmap_unflipped_pred = segmap_flipped_pred.flip(dims=flip_dims)
+                            loss_flip = segmap_loss_func(segmap_pred, segmap_unflipped_pred)
 
-            if opt.debug:
-                if i >= 0:
-                    break
-        train_loss_strong /= i+1
-        train_loss_weak /= i+1
-        train_loss_flip /= i+1
-        train_loss = 0
-        if not opt.no_strong_supervision:
-            train_loss += train_loss_strong
-        if not opt.no_weak_supervision:
-            train_loss += train_loss_weak * opt.lambda_weak
-        if opt.lambda_flip > 0:
-            train_loss += train_loss_flip * opt.lambda_flip
+                    val_loss_strong += loss_strong
+                    val_loss_weak += loss_weak
+                    val_loss_flip += loss_flip
+                    if i_eval == 0:
+                        grid = make_grid(image, segmap_pred, segmap_gt)
+                        tb_writer.add_image('val/images', grid, epoch, dataformats='HWC')
+                        tb_writer.close()
 
-        # Evaluate on val
-        model.eval()
-        val_loss_strong = 0
-        val_loss_weak = 0
-        val_loss_flip = 0
-        for i, data in enumerate(val_data_loader):
-            with torch.no_grad():
-                image = data['image'].to(device)
-                segmap_gt = data['segmap'].to(device)
-                class_vec_gt = data['class_vec'].to(device)
-                segmap_pred = model(image)
-                loss_strong = loss_weak = loss_flip = 0
-                loss_strong = segmap_loss_func(segmap_pred, segmap_gt)
-                loss_weak = class_loss_func(segmap_pred, class_vec_gt)
+                    if opt.debug:
+                        if i_eval >= 0:
+                            break
+
+                val_loss_strong /= i_eval+1
+                val_loss_weak /= i_eval+1
+                val_loss_flip /= i_eval+1
+                val_loss = 0
+                if not opt.no_strong_supervision:
+                    val_loss += val_loss_strong
+                if not opt.no_weak_supervision:
+                    val_loss += val_loss_weak * opt.lambda_weak
                 if opt.lambda_flip > 0:
-                    flip_dims = random.choice([[2], [3], (2, 3)])
-                    image_flipped = image.flip(dims=flip_dims)
-                    segmap_flipped_pred = model(image_flipped)
-                    segmap_unflipped_pred = segmap_flipped_pred.flip(dims=flip_dims)
-                    loss_flip = segmap_loss_func(segmap_pred, segmap_unflipped_pred)
+                    val_loss += val_loss_flip * opt.lambda_flip
 
-            val_loss_strong += loss_strong
-            val_loss_weak += loss_weak
-            val_loss_flip += loss_flip
-            if i == 0:
-                grid = make_grid(image, segmap_pred, segmap_gt)
-                tb_writer.add_image('val/images', grid, epoch, dataformats='HWC')
+                if val_loss_strong < best_val_loss_strong:
+                    best_val_loss_strong = val_loss_strong
+                    logger.info('Saving best model with val loss {} at epoch {}'.format(best_val_loss_strong, epoch))
+                    torch.save(model.state_dict(), os.path.join(dir_logs, 'model_weights_best.pth'))
+
+                logger.info('Epoch {: >3d}  |  Eval iter {: >3d}  |  Train loss {: >2.6f} = strong {: >2.6f} + weak {: >2.6f} + flip {: >2.6f} |  Val loss {: >2.6f} = strong {: >2.6f} + weak {: >2.6f} + flip {: >2.6f} |  Time: {:.0f}'.format(
+                    epoch, n_eval_iterations, train_loss, train_loss_strong, train_loss_weak, train_loss_flip,
+                    val_loss, val_loss_strong, val_loss_weak, val_loss_flip, time.time() - epoch_start_time))
+                tb_writer.add_scalar('train/loss', train_loss, n_eval_iterations)
+                tb_writer.add_scalar('train/loss_strong', train_loss_strong, n_eval_iterations)
+                tb_writer.add_scalar('train/loss_weak', train_loss_weak, n_eval_iterations)
+                tb_writer.add_scalar('train/loss_flip', train_loss_flip, n_eval_iterations)
+                tb_writer.add_scalar('val/loss', val_loss, n_eval_iterations)
+                tb_writer.add_scalar('val/loss_strong', val_loss_strong, n_eval_iterations)
+                tb_writer.add_scalar('val/loss_weak', val_loss_weak, n_eval_iterations)
+                tb_writer.add_scalar('val/loss_flip', val_loss_flip, n_eval_iterations)
                 tb_writer.close()
-
-            if opt.debug:
-                if i >= 0:
-                    break
-
-        val_loss_strong /= i+1
-        val_loss_weak /= i+1
-        val_loss_flip /= i+1
-        val_loss = 0
-        if not opt.no_strong_supervision:
-            val_loss += val_loss_strong
-        if not opt.no_weak_supervision:
-            val_loss += val_loss_weak * opt.lambda_weak
-        if opt.lambda_flip > 0:
-            val_loss += val_loss_flip * opt.lambda_flip
-        
-        if val_loss_strong < best_val_loss_strong:
-            best_val_loss_strong = val_loss_strong
-            logger.info('Saving best model with val loss {} at epoch {}'.format(best_val_loss_strong, epoch))
-            torch.save(model.state_dict(), os.path.join(dir_logs, 'model_weights_best.pth'))
-
-        logger.info('Epoch {: >3d}  |  Train loss {: >2.6f} = strong {: >2.6f} + weak {: >2.6f} + flip {: >2.6f} |  Val loss {: >2.6f} = strong {: >2.6f} + weak {: >2.6f} + flip {: >2.6f} |  Time: {}'.format(
-            epoch, train_loss, train_loss_strong, train_loss_weak, train_loss_flip,
-            val_loss, val_loss_strong, val_loss_weak, val_loss_flip, time.time() - epoch_start_time))
-        tb_writer.add_scalar('train/loss', train_loss, epoch)
-        tb_writer.add_scalar('train/loss_strong', train_loss_strong, epoch)
-        tb_writer.add_scalar('train/loss_weak', train_loss_weak, epoch)
-        tb_writer.add_scalar('train/loss_flip', train_loss_flip, epoch)
-        tb_writer.add_scalar('val/loss', val_loss, epoch)
-        tb_writer.add_scalar('val/loss_strong', val_loss_strong, epoch)
-        tb_writer.add_scalar('val/loss_weak', val_loss_weak, epoch)
-        tb_writer.add_scalar('val/loss_flip', val_loss_flip, epoch)
-        tb_writer.close()
+                n_eval_iterations += 1
     logger.info('Finished training in {:.0f}'.format(time.time() - start_time))
         
         
@@ -253,6 +259,7 @@ if __name__== "__main__":
     parser.add_argument('--lambda_flip', default=0.0, type=float, help='Scaling factor of the flip loss')
     parser.add_argument('--no_strong_supervision', action='store_true', help='Skip strong supervision loss')
     parser.add_argument('--no_weak_supervision', action='store_true', help='Skip weak supervision loss')
+    parser.add_argument('--val_datapoints', default=2048, type=int, help='Validate every N images')
     parser.add_argument('--tag', default='', help='Tag added to model logs folder name')
     parser.add_argument('--debug', '-d', action='store_true', help='Run in debug mode')
     opt = parser.parse_args()
