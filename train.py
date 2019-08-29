@@ -96,10 +96,10 @@ def train(opt):
     
     best_val_loss_strong = np.inf
 
+    n_seen_datapoints_before_evaluation = 0
+    n_eval_iterations = 0
     for epoch in range(opt.epochs):
-        epoch_start_time = time.time()
-        n_seen_datapoints_before_evaluation = 0
-        n_eval_iterations = 0
+        epoch_start_time = time.time()    
 
         # Training
         for i, data in enumerate(train_data_loader):
