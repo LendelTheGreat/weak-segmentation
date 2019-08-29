@@ -42,9 +42,10 @@ dir_val_seg = os.path.join(dir_output, 'val', 'seg')
 def train(opt):
     start_time = time.time()
     if opt.debug:
-        dir_logs = os.path.join(os.getenv('HOME'), 'logs', opt.model+'_DEBUG_'+str(datetime.now().strftime("%Y%m%d_%H-%M-%S")))
+        dir_logs = '{}_{}_DEBUG_{}'.format(opt.model, opt.tag, str(datetime.now().strftime("%Y%m%d_%H-%M-%S")))
     else:
-        dir_logs = os.path.join(os.getenv('HOME'), 'logs', opt.model+'_'+str(datetime.now().strftime("%Y%m%d_%H-%M-%S")))
+        dir_logs = '{}_{}_{}'.format(opt.model, opt.tag, str(datetime.now().strftime("%Y%m%d_%H-%M-%S")))
+    dir_logs = os.path.join(os.getenv('HOME'), 'logs', dir_logs)
     os.makedirs(dir_logs)
     copyfile('train.py', os.path.join(dir_logs, 'train.py'))
     copyfile('models/{}.py'.format(opt.model), os.path.join(dir_logs, '{}.py'.format(opt.model)))
@@ -252,6 +253,7 @@ if __name__== "__main__":
     parser.add_argument('--lambda_flip', default=0.0, type=float, help='Scaling factor of the flip loss')
     parser.add_argument('--no_strong_supervision', action='store_true', help='Skip strong supervision loss')
     parser.add_argument('--no_weak_supervision', action='store_true', help='Skip weak supervision loss')
+    parser.add_argument('--tag', default='', help='Tag added to model logs folder name')
     parser.add_argument('--debug', '-d', action='store_true', help='Run in debug mode')
     opt = parser.parse_args()
     train(opt)
