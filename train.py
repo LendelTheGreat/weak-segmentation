@@ -131,7 +131,7 @@ def train(opt):
             if opt.debug:
                 if i == 0:
                     grid = make_grid(image, segmap_pred, segmap_gt)
-                    tb_writer.add_image('train_debug/images', grid, epoch, dataformats='HWC')
+                    tb_writer.add_image('train_debug/images', grid, n_eval_iterations, dataformats='HWC')
                     tb_writer.close()
                 logger.debug('train iter {: >4d}  |  loss {: >2.4f}  n_seen_datapoints_before_evaluation {} '.format(
                     i, loss.item(), n_seen_datapoints_before_evaluation))
@@ -166,7 +166,7 @@ def train(opt):
                     train_loss_flip += loss_flip
                     if i_eval == 0:
                         grid = make_grid(image, segmap_pred, segmap_gt)
-                        tb_writer.add_image('train/images', grid, epoch, dataformats='HWC')
+                        tb_writer.add_image('train/images', grid, n_eval_iterations, dataformats='HWC')
                         tb_writer.close()
 
                     if opt.debug:
@@ -209,7 +209,7 @@ def train(opt):
                     val_loss_flip += loss_flip
                     if i_eval == 0:
                         grid = make_grid(image, segmap_pred, segmap_gt)
-                        tb_writer.add_image('val/images', grid, epoch, dataformats='HWC')
+                        tb_writer.add_image('val/images', grid, n_eval_iterations, dataformats='HWC')
                         tb_writer.close()
 
                     if opt.debug:

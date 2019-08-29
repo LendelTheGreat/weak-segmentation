@@ -1,3 +1,10 @@
+"""Data iterators to serve data for pytorch training
+
+Here we have 2 data iterators:
+SimpleISPRSVaihingenDataset for evalutation
+StrongWeakISPRSVaihingenDataset for training on strongly and weakly supervised data.
+"""
+
 import os
 import random
 
@@ -10,9 +17,23 @@ from utils.utils import segmap_colors_to_segmap_classes, segmap_classes_to_class
 
 
 class StrongWeakISPRSVaihingenDataset(Dataset):
-    """ISPRS Vaihingen dataset of crops and semantic segmentation segmaps for strong and weak supervision"""
+    """ISPRS Vaihingen dataset of crops and semantic segmentation segmaps for strong and weak supervision
+    """
 
     def __init__(self, dir_strong, dir_weak, transform=None, preshuffle=False):
+        """Initialize StrongWeakISPRSVaihingenDataset
+        
+        Parameters
+        ----------
+        dir_strong : str
+            Path to a directory with input images and ground truth segmaps for strong supervision
+        dir_weak : str
+            Path to a directory with input images and ground truth segmaps for weak supervision
+        transform : tourchvision.Transform, optional
+            Transform the images before returning them e.g. transforms.ToTensor()
+        preshuffle : bool, optional
+            Randomly shuffle the data during initialization
+        """
         self.dir_strong = dir_strong
         if dir_strong is not None:
             self.imagenames_strong = os.listdir(os.path.join(dir_strong, 'img'))
@@ -32,6 +53,7 @@ class StrongWeakISPRSVaihingenDataset(Dataset):
             segmapnames_weak = os.listdir(os.path.join(dir_weak, 'seg'))
             segmapnames_weak = [file for file in segmapnames_weak if file.split('.')[-1] == 'png']
             assert len(self.imagenames_weak) == len(segmapnames_weak), 'Images and segmaps weak folders should contain same number of files!\nimages: {}\nsegmaps: {}'.format(len(self.imagenames_weak), len(segmapnames_weak))
+            self.imagenames_weak = self.imagenames_weak[:1000]
         else:
             self.imagenames_weak = []
             
@@ -76,9 +98,22 @@ class StrongWeakISPRSVaihingenDataset(Dataset):
 
 
 class SimpleISPRSVaihingenDataset(Dataset):
-    """ISPRS Vaihingen dataset of crops and semantic segmentation segmaps"""
+    """ISPRS Vaihingen dataset of crops and semantic segmentation maps"""
 
     def __init__(self, dir_images, dir_segmaps, transform=None, preshuffle=False):
+        """Initialize SimpleISPRSVaihingenDataset
+        
+        Parameters
+        ----------
+        dir_images : str
+            Path to a directory with input images
+        dir_segmaps : str
+            Path to a directory with ground truth segmaps
+        transform : tourchvision.Transform, optional
+            Transform the images before returning them e.g. transforms.ToTensor()
+        preshuffle : bool, optional
+            Randomly shuffle the data during initialization
+        """
         self.dir_images = dir_images
         self.images = [file for file in os.listdir(dir_images) if file.split('.')[-1] == 'png']
         self.images.sort()

@@ -1,3 +1,10 @@
+"""Train/Validation/Test dataset split
+
+The dataset needs to be split into train/val/test sets to properly validate the hypothesis.
+To make sure the split is always consistent, it is hardcoded here.
+All other scripts reference this file for the split ids.
+"""
+
 all_ids = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 37, 38]
 train_strong_ids = [1, 2, 3, 21]
 train_weak_ids = [6, 7, 8, 10, 11, 12, 13, 14, 15, 17, 20, 26, 27, 28, 29, 30, 33, 34, 35, 37, 38]

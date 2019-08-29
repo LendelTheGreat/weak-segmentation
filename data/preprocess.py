@@ -1,3 +1,9 @@
+"""Preprocess downloaded dataset
+
+This script crops the input images and output segmaps
+and saves them in train/val/test folders based on dataset_split.py
+"""
+
 import os
 
 import numpy as np
@@ -94,8 +100,3 @@ def run():
     
 if __name__== "__main__":
   run()
-
-# TODO: this is out of date
-# Last output of this script:
-# Total class frequencies: [0.81808962 0.77574951 0.81352602 0.81644166 0.29758509]
-# Saved 15777 crops into /home/ubuntu/data/crops/

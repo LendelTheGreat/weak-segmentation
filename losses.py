@@ -4,6 +4,9 @@ import torch.nn as nn
 
 
 class SegmentationLoss(torch.nn.Module):
+    """
+    Mean squared error loss between 2 segmentation maps
+    """
     def __init__(self):
         super(SegmentationLoss, self).__init__()
         self.mse = nn.MSELoss()
@@ -17,11 +20,30 @@ class SegmentationLoss(torch.nn.Module):
 
     
 class ClassLoss(torch.nn.Module):
+    """
+    Binary cross entropy loss between 2 class vectors.
+    The predicted segmentation map is converted into
+    a predicted class vector via the global_weighted_rank_pooling function.
+    """
     def __init__(self):
         super(ClassLoss, self).__init__()
         self.loss = nn.BCELoss()
         
     def global_weighted_rank_pooling(self, probs, class_vec_gt):
+        """Function to get class probabilities from a per class segmentation map.
+        
+        Parameters
+        ----------
+        probs : Tensor (shape: (B, C, H, W))
+            Predicted segmentation map as it is returned by the model
+        class_vec_gt : Tensor (shape: (B, C))
+            Ground truth classes
+            
+        Returns
+        -------
+        probs_mean : Tensor (shape: (B, C))
+            Predicited probability for each class
+        """
         sh = probs.size() # probs size: B C H W
         probs = probs.view(sh[0], sh[1], sh[2]*sh[3]).contiguous()
         probs_sorted, _ = probs.sort(dim=2) # probs_sorted size: B C H*W

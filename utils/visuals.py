@@ -3,6 +3,24 @@ import numpy as np
 from utils.utils import segmap_classes_to_segmap_stacked, segmap_stacked_to_segmap_colors
 
 def make_grid(image_batch, segmap_classes_pred_batch, segmap_classes_gt_batch, max_grid_length=10):
+    """Create a grid of images to be visualized in tensorboard
+
+    Parameters
+    ------
+    image_batch : Tensor (shape: (B, 3, H, W))
+        Input image batch
+    segmap_classes_pred_batch : Tensor (shape: (B, 5, H, W))
+        Predicted segmentation map batch
+    segmap_classes_gt_batch : Tensor (shape: (B, 5, H, W))
+        Ground truth segmentation map batch
+    max_grid_length: int, optional
+        Maximum number of images to make the grid from
+
+    Returns
+    -------
+    grid : np array (shape: (3*H, B*W, 3))
+        Grid of images and segmaps to be visualized
+    """
     image_batch = image_batch.cpu().detach().numpy()
     image_batch = np.moveaxis(image_batch, 1, 3)
     segmap_classes_pred_batch = segmap_classes_pred_batch.cpu().detach().numpy()
